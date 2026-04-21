@@ -33,23 +33,50 @@ def download_formatted_transcript(video_url):
         
         formatted_output = ""
         
-        for i, entry in enumerate(transcript):
+        paragraph_start_time = None
+        
+        for entry in transcript:
             start_time = entry.start
             text = entry.text.replace('\n', ' ') # Clean up newlines in text
             
-            # Add the timestamp only at the beginning of each paragraph (every 3 snippets)
-            if i % 3 == 0:
+            # Start a new paragraph
+            if paragraph_start_time is None:
+                paragraph_start_time = start_time
                 timestamp_label = format_timestamp(start_time)
                 # YouTube timestamp links use ?t=seconds
                 link = f"https://youtu.be/{video_id}?t={int(start_time)}"
                 formatted_output += f"[{timestamp_label}]({link}) "
             
-            # Append the text snippet
-            formatted_output += f"{text} "
+            # Check for a break condition if we've passed 10 seconds
+            p_duration = start_time - paragraph_start_time
+            if p_duration >= 10:
+                # Look for the first sentence ender (. ! ?) followed by space or end of string
+                match = re.search(r'([.!?])(\s+|$)', text)
+                if match:
+                    split_idx = match.end()
+                    before = text[:split_idx]
+                    after = text[split_idx:]
+                    
+                    formatted_output += before.strip() + "\n\n"
+                    
+                    if after.strip():
+                        # Start new paragraph with the remainder of the snippet
+                        paragraph_start_time = start_time
+                        timestamp_label = format_timestamp(start_time)
+                        link = f"https://youtu.be/{video_id}?t={int(start_time)}"
+                        formatted_output += f"[{timestamp_label}]({link}) {after.strip()} "
+                    else:
+                        paragraph_start_time = None
+                    continue
+                
+                # Hard cap fallback: if no sentence ender is found for 30 seconds, force a break
+                if p_duration >= 30:
+                    formatted_output += text.strip() + "\n\n"
+                    paragraph_start_time = None
+                    continue
             
-            # Add a line break every 3 snippets to group sentences together
-            if (i + 1) % 3 == 0:
-                formatted_output += "\n\n"
+            # Append the text snippet normally
+            formatted_output += f"{text} "
             
         return formatted_output
 
@@ -57,7 +84,7 @@ def download_formatted_transcript(video_url):
         return f"Error: {str(e)}"
 
 # Example Usage:
-video_url = "https://www.youtube.com/watch?v=PY9DcIMGxMs"
+video_url = "https://www.youtube.com/watch?v=D14LaBUw0Cs"
 result = download_formatted_transcript(video_url)
 
 # To save to a text file:
