@@ -1,0 +1,65 @@
+import re
+from youtube_transcript_api import YouTubeTranscriptApi
+
+def get_video_id(url):
+    """
+    Extracts the video ID from a standard YouTube URL.
+    """
+    video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", url)
+    if video_id_match:
+        return video_id_match.group(1)
+    return url # Assume it's already an ID if no match
+
+def format_timestamp(seconds):
+    """
+    Converts seconds into MM:SS or HH:MM:SS format.
+    """
+    seconds = int(seconds)
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+def download_formatted_transcript(video_url):
+    video_id = get_video_id(video_url)
+    
+    try:
+        # Fetch the transcript using the new instance-based API (v1.x+)
+        api = YouTubeTranscriptApi()
+        transcript = api.fetch(video_id)
+        
+        formatted_output = ""
+        
+        for i, entry in enumerate(transcript):
+            start_time = entry.start
+            text = entry.text.replace('\n', ' ') # Clean up newlines in text
+            
+            # Add the timestamp only at the beginning of each paragraph (every 3 snippets)
+            if i % 3 == 0:
+                timestamp_label = format_timestamp(start_time)
+                # YouTube timestamp links use ?t=seconds
+                link = f"https://youtu.be/{video_id}?t={int(start_time)}"
+                formatted_output += f"[{timestamp_label}]({link}) "
+            
+            # Append the text snippet
+            formatted_output += f"{text} "
+            
+            # Add a line break every 3 snippets to group sentences together
+            if (i + 1) % 3 == 0:
+                formatted_output += "\n\n"
+            
+        return formatted_output
+
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+# Example Usage:
+video_url = "https://www.youtube.com/watch?v=PY9DcIMGxMs"
+result = download_formatted_transcript(video_url)
+
+# To save to a text file:
+with open("transcript.md", "w", encoding="utf-8") as f:
+    f.write(result)
